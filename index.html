@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Tools - Merge & OCR</title>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://unpkg.com/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #fff;
+            font-size: 2.5rem;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #a0a0a0;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .upload-zone {
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: #4fc3f7;
+            background: rgba(79, 195, 247, 0.1);
+        }
+
+        .upload-zone svg {
+            width: 60px;
+            height: 60px;
+            fill: #4fc3f7;
+            margin-bottom: 15px;
+        }
+
+        .upload-zone p {
+            font-size: 1.1rem;
+            color: #b0b0b0;
+        }
+
+        .upload-zone .formats {
+            font-size: 0.85rem;
+            color: #707070;
+            margin-top: 8px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-list {
+            list-style: none;
+            margin-bottom: 20px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: grab;
+        }
+
+        .file-item:active {
+            cursor: grabbing;
+        }
+
+        .file-item.dragging {
+            opacity: 0.5;
+            background: rgba(79, 195, 247, 0.2);
+        }
+
+        .file-item .file-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .file-item .file-icon {
+            width: 32px;
+            height: 32px;
+            fill: #e57373;
+        }
+
+        .file-item .file-name {
+            font-weight: 500;
+        }
+
+        .file-item .file-size {
+            color: #808080;
+            font-size: 0.85rem;
+        }
+
+        .file-item .remove-btn {
+            background: none;
+            border: none;
+            color: #ff6b6b;
+            cursor: pointer;
+            padding: 5px;
+            font-size: 1.2rem;
+            transition: transform 0.2s;
+        }
+
+        .file-item .remove-btn:hover {
+            transform: scale(1.2);
+        }
+
+        .actions {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            flex: 1;
+            min-width: 200px;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-merge {
+            background: linear-gradient(135deg, #4fc3f7, #29b6f6);
+            color: #000;
+        }
+
+        .btn-merge:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(79, 195, 247, 0.4);
+        }
+
+        .btn-ocr {
+            background: linear-gradient(135deg, #81c784, #66bb6a);
+            color: #000;
+        }
+
+        .btn-ocr:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(129, 199, 132, 0.4);
+        }
+
+        .btn svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        .clear-btn {
+            background: rgba(255, 107, 107, 0.2);
+            color: #ff6b6b;
+            border: 1px solid rgba(255, 107, 107, 0.3);
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+
+        .clear-btn:hover {
+            background: rgba(255, 107, 107, 0.3);
+        }
+
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4fc3f7, #81c784);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #a0a0a0;
+            font-size: 0.9rem;
+        }
+
+        .output-section {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .output-section.active {
+            display: block;
+        }
+
+        .output-section h3 {
+            margin-bottom: 15px;
+            color: #81c784;
+        }
+
+        .ocr-output {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .download-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #4fc3f7, #29b6f6);
+            color: #000;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .download-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(79, 195, 247, 0.4);
+        }
+
+        .copy-btn {
+            margin-left: 15px;
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            cursor: pointer;
+            text-align: center;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .tab.active {
+            background: rgba(79, 195, 247, 0.2);
+            border-color: #4fc3f7;
+            color: #4fc3f7;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .ocr-options {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .ocr-options label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .ocr-options select {
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 0.9rem;
+        }
+
+        .ocr-options select option {
+            background: #1a1a2e;
+        }
+
+        .drag-hint {
+            text-align: center;
+            color: #606060;
+            font-size: 0.85rem;
+            margin-bottom: 15px;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            color: #606060;
+            font-size: 0.85rem;
+        }
+
+        footer a {
+            color: #4fc3f7;
+            text-decoration: none;
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+
+            .btn {
+                min-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PDF Tools</h1>
+        <p class="subtitle">Merge multiple PDFs or extract text with OCR - all in your browser</p>
+
+        <div class="card">
+            <div class="tabs">
+                <div class="tab active" data-tab="merge">Merge PDFs</div>
+                <div class="tab" data-tab="ocr">OCR (Extract Text)</div>
+            </div>
+
+            <div class="upload-zone" id="uploadZone">
+                <svg viewBox="0 0 24 24"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M12,12L16,16H13.5V19H10.5V16H8L12,12Z"/></svg>
+                <p>Drop PDF files here or click to browse</p>
+                <p class="formats">Supports multiple PDF files</p>
+            </div>
+            <input type="file" id="fileInput" accept=".pdf" multiple>
+
+            <div id="fileListContainer" style="display: none;">
+                <button class="clear-btn" id="clearBtn">Clear All Files</button>
+                <p class="drag-hint">Drag files to reorder (for merge)</p>
+                <ul class="file-list" id="fileList"></ul>
+            </div>
+
+            <div class="tab-content active" data-content="merge">
+                <div class="actions">
+                    <button class="btn btn-merge" id="mergeBtn" disabled>
+                        <svg viewBox="0 0 24 24"><path d="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8H21L4,8V18L6.14,10H23.21L20.93,18.5C20.7,19.37 19.92,20 19,20Z"/></svg>
+                        Merge PDFs
+                    </button>
+                </div>
+            </div>
+
+            <div class="tab-content" data-content="ocr">
+                <div class="ocr-options">
+                    <label>
+                        Language:
+                        <select id="ocrLang">
+                            <option value="eng">English</option>
+                            <option value="fra">French</option>
+                            <option value="deu">German</option>
+                            <option value="spa">Spanish</option>
+                            <option value="ita">Italian</option>
+                            <option value="por">Portuguese</option>
+                            <option value="nld">Dutch</option>
+                            <option value="pol">Polish</option>
+                            <option value="rus">Russian</option>
+                            <option value="jpn">Japanese</option>
+                            <option value="chi_sim">Chinese (Simplified)</option>
+                            <option value="chi_tra">Chinese (Traditional)</option>
+                            <option value="kor">Korean</option>
+                            <option value="ara">Arabic</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-ocr" id="ocrBtn" disabled>
+                        <svg viewBox="0 0 24 24"><path d="M17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12M14.5,8A1.5,1.5 0 0,1 13,6.5A1.5,1.5 0 0,1 14.5,5A1.5,1.5 0 0,1 16,6.5A1.5,1.5 0 0,1 14.5,8M9.5,8A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 9.5,5A1.5,1.5 0 0,1 11,6.5A1.5,1.5 0 0,1 9.5,8M6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3Z"/></svg>
+                        Extract Text (OCR)
+                    </button>
+                </div>
+            </div>
+
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <p class="progress-text" id="progressText">Processing...</p>
+            </div>
+        </div>
+
+        <div class="output-section" id="outputSection">
+            <div class="card">
+                <h3 id="outputTitle">Result</h3>
+                <div id="mergeOutput" style="display: none;">
+                    <a class="download-link" id="downloadLink" download="merged.pdf">
+                        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
+                        Download Merged PDF
+                    </a>
+                </div>
+                <div id="ocrOutput" style="display: none;">
+                    <div style="margin-bottom: 15px;">
+                        <a class="download-link" id="downloadTextLink" download="extracted-text.txt">
+                            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
+                            Download Text
+                        </a>
+                        <button class="copy-btn" id="copyBtn">Copy to Clipboard</button>
+                    </div>
+                    <div class="ocr-output" id="ocrText"></div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>All processing happens locally in your browser. Your files never leave your device.</p>
+        </footer>
+    </div>
+
+    <script>
+        // Set PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // State
+        let files = [];
+        let activeTab = 'merge';
+
+        // DOM Elements
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const fileListContainer = document.getElementById('fileListContainer');
+        const clearBtn = document.getElementById('clearBtn');
+        const mergeBtn = document.getElementById('mergeBtn');
+        const ocrBtn = document.getElementById('ocrBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const outputSection = document.getElementById('outputSection');
+        const outputTitle = document.getElementById('outputTitle');
+        const mergeOutput = document.getElementById('mergeOutput');
+        const ocrOutput = document.getElementById('ocrOutput');
+        const downloadLink = document.getElementById('downloadLink');
+        const downloadTextLink = document.getElementById('downloadTextLink');
+        const ocrText = document.getElementById('ocrText');
+        const copyBtn = document.getElementById('copyBtn');
+        const ocrLang = document.getElementById('ocrLang');
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        // Tab switching
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                activeTab = tab.dataset.tab;
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                tabContents.forEach(c => {
+                    c.classList.toggle('active', c.dataset.content === activeTab);
+                });
+                updateButtons();
+            });
+        });
+
+        // Upload zone events
+        uploadZone.addEventListener('click', () => fileInput.click());
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+            fileInput.value = '';
+        });
+
+        clearBtn.addEventListener('click', () => {
+            files = [];
+            renderFileList();
+            updateButtons();
+            outputSection.classList.remove('active');
+        });
+
+        // Handle dropped/selected files
+        function handleFiles(newFiles) {
+            for (const file of newFiles) {
+                if (file.type === 'application/pdf') {
+                    files.push(file);
+                }
+            }
+            renderFileList();
+            updateButtons();
+        }
+
+        // Render file list
+        function renderFileList() {
+            fileListContainer.style.display = files.length > 0 ? 'block' : 'none';
+            fileList.innerHTML = files.map((file, index) => `
+                <li class="file-item" draggable="true" data-index="${index}">
+                    <div class="file-info">
+                        <svg class="file-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/></svg>
+                        <div>
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-size">${formatSize(file.size)}</div>
+                        </div>
+                    </div>
+                    <button class="remove-btn" data-index="${index}">&times;</button>
+                </li>
+            `).join('');
+
+            // Remove buttons
+            fileList.querySelectorAll('.remove-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.dataset.index);
+                    files.splice(index, 1);
+                    renderFileList();
+                    updateButtons();
+                });
+            });
+
+            // Drag and drop reordering
+            let draggedItem = null;
+            fileList.querySelectorAll('.file-item').forEach(item => {
+                item.addEventListener('dragstart', (e) => {
+                    draggedItem = item;
+                    item.classList.add('dragging');
+                });
+                item.addEventListener('dragend', () => {
+                    item.classList.remove('dragging');
+                    draggedItem = null;
+                });
+                item.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    if (draggedItem && draggedItem !== item) {
+                        const fromIndex = parseInt(draggedItem.dataset.index);
+                        const toIndex = parseInt(item.dataset.index);
+                        const temp = files[fromIndex];
+                        files.splice(fromIndex, 1);
+                        files.splice(toIndex, 0, temp);
+                        renderFileList();
+                    }
+                });
+            });
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function updateButtons() {
+            const hasFiles = files.length > 0;
+            mergeBtn.disabled = files.length < 2;
+            ocrBtn.disabled = !hasFiles;
+        }
+
+        function showProgress(text, percent) {
+            progressContainer.classList.add('active');
+            progressText.textContent = text;
+            progressFill.style.width = percent + '%';
+        }
+
+        function hideProgress() {
+            progressContainer.classList.remove('active');
+            progressFill.style.width = '0%';
+        }
+
+        // Merge PDFs
+        mergeBtn.addEventListener('click', async () => {
+            if (files.length < 2) return;
+
+            try {
+                mergeBtn.disabled = true;
+                showProgress('Merging PDFs...', 0);
+
+                const { PDFDocument } = PDFLib;
+                const mergedPdf = await PDFDocument.create();
+
+                for (let i = 0; i < files.length; i++) {
+                    showProgress(`Processing file ${i + 1} of ${files.length}...`, (i / files.length) * 100);
+
+                    const arrayBuffer = await files[i].arrayBuffer();
+                    const pdf = await PDFDocument.load(arrayBuffer);
+                    const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                    pages.forEach(page => mergedPdf.addPage(page));
+                }
+
+                showProgress('Finalizing...', 90);
+                const mergedPdfBytes = await mergedPdf.save();
+                const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+
+                downloadLink.href = url;
+                outputTitle.textContent = 'Merged PDF Ready';
+                mergeOutput.style.display = 'block';
+                ocrOutput.style.display = 'none';
+                outputSection.classList.add('active');
+
+                showProgress('Complete!', 100);
+                setTimeout(hideProgress, 1000);
+            } catch (error) {
+                console.error('Merge error:', error);
+                alert('Error merging PDFs: ' + error.message);
+                hideProgress();
+            } finally {
+                mergeBtn.disabled = false;
+                updateButtons();
+            }
+        });
+
+        // OCR PDFs
+        ocrBtn.addEventListener('click', async () => {
+            if (files.length === 0) return;
+
+            try {
+                ocrBtn.disabled = true;
+                showProgress('Initializing OCR engine...', 0);
+
+                const language = ocrLang.value;
+                let allText = '';
+
+                for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+                    const file = files[fileIndex];
+                    showProgress(`Loading PDF ${fileIndex + 1} of ${files.length}...`,
+                        (fileIndex / files.length) * 100);
+
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    const numPages = pdf.numPages;
+
+                    if (files.length > 1) {
+                        allText += `\n${'='.repeat(50)}\n`;
+                        allText += `FILE: ${file.name}\n`;
+                        allText += `${'='.repeat(50)}\n\n`;
+                    }
+
+                    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+                        const baseProgress = (fileIndex / files.length) * 100;
+                        const pageProgress = ((pageNum - 1) / numPages) * (100 / files.length);
+                        showProgress(
+                            `Processing ${file.name} - Page ${pageNum}/${numPages}...`,
+                            baseProgress + pageProgress
+                        );
+
+                        const page = await pdf.getPage(pageNum);
+                        const viewport = page.getViewport({ scale: 2.0 });
+
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+
+                        await page.render({
+                            canvasContext: context,
+                            viewport: viewport
+                        }).promise;
+
+                        const result = await Tesseract.recognize(canvas, language, {
+                            logger: (m) => {
+                                if (m.status === 'recognizing text') {
+                                    const ocrProgress = m.progress * (100 / files.length / numPages);
+                                    showProgress(
+                                        `OCR: ${file.name} - Page ${pageNum}/${numPages} (${Math.round(m.progress * 100)}%)`,
+                                        baseProgress + pageProgress + ocrProgress
+                                    );
+                                }
+                            }
+                        });
+
+                        if (numPages > 1) {
+                            allText += `--- Page ${pageNum} ---\n\n`;
+                        }
+                        allText += result.data.text + '\n\n';
+                    }
+                }
+
+                ocrText.textContent = allText.trim();
+                const textBlob = new Blob([allText], { type: 'text/plain' });
+                downloadTextLink.href = URL.createObjectURL(textBlob);
+
+                outputTitle.textContent = 'Extracted Text';
+                mergeOutput.style.display = 'none';
+                ocrOutput.style.display = 'block';
+                outputSection.classList.add('active');
+
+                showProgress('Complete!', 100);
+                setTimeout(hideProgress, 1000);
+            } catch (error) {
+                console.error('OCR error:', error);
+                alert('Error performing OCR: ' + error.message);
+                hideProgress();
+            } finally {
+                ocrBtn.disabled = false;
+                updateButtons();
+            }
+        });
+
+        // Copy to clipboard
+        copyBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(ocrText.textContent);
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                }, 2000);
+            } catch (error) {
+                console.error('Copy error:', error);
+                alert('Failed to copy text');
+            }
+        });
+    </script>
+</body>
+</html>
