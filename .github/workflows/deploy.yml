@@ -26,6 +26,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Create vendor directories
+        run: mkdir -p vendor/tesseract/lang
+
+      - name: Download PDF.js worker
+        run: |
+          curl -L -o vendor/pdf.worker.min.js \
+            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"
+
+      - name: Download Tesseract.js files
+        run: |
+          # Worker
+          curl -L -o vendor/tesseract/worker.min.js \
+            "https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/worker.min.js"
+          # Core SIMD
+          curl -L -o vendor/tesseract/tesseract-core-simd.wasm.js \
+            "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core-simd.wasm.js"
+
+      - name: Download language data (English & French)
+        run: |
+          # English
+          curl -L -o vendor/tesseract/lang/eng.traineddata.gz \
+            "https://github.com/naptha/tessdata/raw/gh-pages/4.0.0/eng.traineddata.gz"
+          # French
+          curl -L -o vendor/tesseract/lang/fra.traineddata.gz \
+            "https://github.com/naptha/tessdata/raw/gh-pages/4.0.0/fra.traineddata.gz"
+
+      - name: Verify downloads
+        run: |
+          echo "Verifying downloaded files..."
+          ls -la vendor/
+          ls -la vendor/tesseract/
+          ls -la vendor/tesseract/lang/
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
